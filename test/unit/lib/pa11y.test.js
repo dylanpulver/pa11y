@@ -261,6 +261,39 @@ describe('lib/pa11y', function() {
 
 		});
 
+		describe('when the timeout fires before the browser has launched', function() {
+			let rejectedError;
+
+			beforeEach(async function() {
+				// The run is abandoned, not stopped, so the browser arrives
+				// after pa11y has already rejected and cleaned up once.
+				puppeteer.mockBrowser.close.resetHistory();
+				puppeteer.launch.returns(new Promise(resolve => {
+					setTimeout(() => resolve(puppeteer.mockBrowser), 40);
+				}));
+				try {
+					await pa11y('https://mock-url/', {timeout: 10});
+				} catch (error) {
+					rejectedError = error;
+				}
+				// Let the late launch finish and the run settle.
+				await new Promise(resolve => setTimeout(resolve, 100));
+			});
+
+			afterEach(function() {
+				puppeteer.launch.resolves(puppeteer.mockBrowser);
+			});
+
+			it('rejects with a timeout error', function() {
+				assert.strictEqual(rejectedError.name, 'TimeoutError');
+			});
+
+			it('still closes the browser once it has launched', function() {
+				assert.calledOnce(puppeteer.mockBrowser.close);
+			});
+
+		});
+
 		describe('when Headless Chrome errors', function() {
 			let headlessChromeError;
 			let rejectedError;
